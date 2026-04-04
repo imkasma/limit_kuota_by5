@@ -130,11 +130,6 @@ class _NetworkState extends State<Network> {
               icon: const Icon(Icons.refresh),
               label: const Text('Refresh Data'),
             ),
-            ElevatedButton(
-              onPressed: () => IntentHelper.openDataLimitSettings(),
-              // style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text("Atur Batas Kuota di Sistem"),
-            ),
           ],
         ),
       ),
