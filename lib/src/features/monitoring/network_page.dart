@@ -4,7 +4,12 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ TAMBAHAN
 import 'package:limit_kuota/src/core/data/database_helper.dart';
 import 'package:limit_kuota/src/core/services/intent_helper.dart';
+<<<<<<< HEAD
 import 'package:limit_kuota/src/features/monitoring/history_page.dart';
+=======
+import 'package:limit_kuota/src/features/monitoring/history_page.dart'; // Import History Page
+import 'package:limit_kuota/src/core/widgets/progress_quota.dart';
+>>>>>>> 9b3eb6c (Bar Progres Pemakaian)
 
 class Network extends StatefulWidget {
   const Network({super.key});
@@ -19,6 +24,7 @@ class _NetworkState extends State<Network> {
   String wifiUsage = "0.00 MB";
   String mobileUsage = "0.00 MB";
 
+<<<<<<< HEAD
   // ================= RESET BULANAN =================
   Future<void> checkMonthlyReset() async {
     final prefs = await SharedPreferences.getInstance();
@@ -54,6 +60,10 @@ class _NetworkState extends State<Network> {
     );
   }
   // =================================================
+=======
+  double wifiBytesVal = 0;
+  double mobileBytesVal = 0;
+>>>>>>> 9b3eb6c (Bar Progres Pemakaian)
 
   Future<void> fetchUsage() async {
     try {
@@ -73,8 +83,14 @@ class _NetworkState extends State<Network> {
       );
 
       setState(() {
-        wifiUsage = _formatBytes(result['wifi']);
-        mobileUsage = _formatBytes(result['mobile']);
+        int wifi = result['wifi'] ?? 0;
+        int mobile = result['mobile'] ?? 0;
+
+        wifiUsage = _formatBytes(wifi);
+        mobileUsage = _formatBytes(mobile);
+
+        wifiBytesVal = wifi.toDouble();
+        mobileBytesVal = mobile.toDouble();
       });
 
       // 🔥 cek limit setelah ambil data
@@ -161,9 +177,17 @@ class _NetworkState extends State<Network> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _usageCard("WiFi Today", wifiUsage, Icons.wifi),
+            const SizedBox(height: 8),
+            ProgressQuota(used: wifiBytesVal, limit: 1024 * 1024 * 1024),
+
             const SizedBox(height: 20),
+
             _usageCard("Mobile Today", mobileUsage, Icons.signal_cellular_alt),
+            const SizedBox(height: 8),
+            ProgressQuota(used: mobileBytesVal, limit: 1024 * 1024 * 1024),
+
             const SizedBox(height: 40),
+
             ElevatedButton.icon(
               onPressed: fetchUsage,
               icon: const Icon(Icons.refresh),
