@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ TAMBAHAN
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:limit_kuota/src/core/data/database_helper.dart';
 import 'package:limit_kuota/src/core/services/intent_helper.dart';
-<<<<<<< HEAD
 import 'package:limit_kuota/src/features/monitoring/history_page.dart';
-=======
-import 'package:limit_kuota/src/features/monitoring/history_page.dart'; // Import History Page
 import 'package:limit_kuota/src/core/widgets/progress_quota.dart';
->>>>>>> 9b3eb6c (Bar Progres Pemakaian)
 
 class Network extends StatefulWidget {
   const Network({super.key});
@@ -24,7 +20,9 @@ class _NetworkState extends State<Network> {
   String wifiUsage = "0.00 MB";
   String mobileUsage = "0.00 MB";
 
-<<<<<<< HEAD
+  double wifiBytesVal = 0;
+  double mobileBytesVal = 0;
+
   // ================= RESET BULANAN =================
   Future<void> checkMonthlyReset() async {
     final prefs = await SharedPreferences.getInstance();
@@ -47,23 +45,20 @@ class _NetworkState extends State<Network> {
   Future<void> _resetDatabase() async {
     final db = await DatabaseHelper.instance.database;
 
-    await db.delete('usage'); // ⚠️ pastikan nama tabel kamu benar
+    await db.delete('usage');
 
     setState(() {
       wifiUsage = "0.00 MB";
       mobileUsage = "0.00 MB";
+      wifiBytesVal = 0;
+      mobileBytesVal = 0;
     });
 
-    // Optional notif
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Data telah direset (bulan baru)")),
     );
   }
   // =================================================
-=======
-  double wifiBytesVal = 0;
-  double mobileBytesVal = 0;
->>>>>>> 9b3eb6c (Bar Progres Pemakaian)
 
   Future<void> fetchUsage() async {
     try {
@@ -83,17 +78,13 @@ class _NetworkState extends State<Network> {
       );
 
       setState(() {
-        int wifi = result['wifi'] ?? 0;
-        int mobile = result['mobile'] ?? 0;
+        wifiUsage = _formatBytes(wifiBytes);
+        mobileUsage = _formatBytes(mobileBytes);
 
-        wifiUsage = _formatBytes(wifi);
-        mobileUsage = _formatBytes(mobile);
-
-        wifiBytesVal = wifi.toDouble();
-        mobileBytesVal = mobile.toDouble();
+        wifiBytesVal = wifiBytes.toDouble();
+        mobileBytesVal = mobileBytes.toDouble();
       });
 
-      // 🔥 cek limit setelah ambil data
       await checkLimitAndWarn(mobileBytes);
     } on PlatformException catch (e) {
       if (e.code == "PERMISSION_DENIED") {
@@ -121,7 +112,6 @@ class _NetworkState extends State<Network> {
           title: const Text("Batas Kuota Tercapai!"),
           content: const Text(
             "Penggunaan data Anda sudah mencapai limit. "
-            "Sistem Android tidak mengizinkan aplikasi mematikan internet secara otomatis. "
             "Silakan aktifkan 'Set Data Limit' di pengaturan sistem.",
           ),
           actions: [
@@ -142,7 +132,6 @@ class _NetworkState extends State<Network> {
     }
   }
 
-  // ================= INIT =================
   @override
   void initState() {
     super.initState();
@@ -150,10 +139,9 @@ class _NetworkState extends State<Network> {
   }
 
   Future<void> initApp() async {
-    await checkMonthlyReset(); // 🔥 cek reset dulu
-    await fetchUsage(); // lalu ambil data
+    await checkMonthlyReset();
+    await fetchUsage();
   }
-  // =======================================
 
   @override
   Widget build(BuildContext context) {
