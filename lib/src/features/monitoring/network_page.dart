@@ -1,11 +1,12 @@
+// src/features/monitoring/network_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:limit_kuota/src/core/data/database_helper.dart';
-import 'package:limit_kuota/src/core/services/intent_helper.dart';
-import 'package:limit_kuota/src/features/monitoring/history_page.dart';
-import 'package:limit_kuota/src/core/widgets/progress_quota.dart';
+import 'package:limit_kuota_by5/src/core/data/database_helper.dart';
+import 'package:limit_kuota_by5/src/core/services/intent_helper.dart';
+import 'package:limit_kuota_by5/src/features/monitoring/history_page.dart';
+import 'package:limit_kuota_by5/src/core/widgets/progress_quota.dart';
 
 class Network extends StatefulWidget {
   const Network({super.key});
