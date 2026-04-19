@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart'; // Import intl untuk format tanggal
-import 'package:limit_kuota/src/core/data/database_helper.dart'; // Import Database Helper
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:limit_kuota/src/core/data/database_helper.dart';
 import 'package:limit_kuota/src/core/services/intent_helper.dart';
-import 'package:limit_kuota/src/features/monitoring/history_page.dart'; // Import History Page
+import 'package:limit_kuota/src/features/monitoring/history_page.dart';
+import 'package:limit_kuota/src/features/statistics/statistics_page.dart';
 
 class Network extends StatefulWidget {
   const Network({super.key});
@@ -18,33 +21,86 @@ class _NetworkState extends State<Network> {
   String wifiUsage = "0.00 MB";
   String mobileUsage = "0.00 MB";
 
+  double totalKuotaGB = 30;
+
+  Future<void> saveTotalKuota() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setDouble('total_kuota', totalKuotaGB);
+  }
+
+  Future<void> loadTotalKuota() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      totalKuotaGB = prefs.getDouble('total_kuota') ?? 30;
+    });
+  }
+
+  void setTotalKuota() {
+    TextEditingController controller = TextEditingController(
+      text: totalKuotaGB.toString(),
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Set Total Kuota"),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: "Masukkan GB"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text("Batal"),
+          ),
+
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                totalKuotaGB = double.tryParse(controller.text) ?? 30;
+              });
+
+              saveTotalKuota();
+
+              Navigator.pop(context);
+            },
+            child: const Text("Simpan"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= FETCH DATA =================
   Future<void> fetchUsage() async {
     try {
-      // Sekarang result adalah Map
-      final Map<dynamic, dynamic> result = await platform.invokeMethod(
-        'getTodayUsage',
-      );
+      final result = await platform.invokeMethod('getTodayUsage') as Map? ?? {};
 
-      // --- LOGIKA PENYIMPANAN KE SQLITE ---
-      // Ambil tanggal hari ini dalam format YYYY-MM-DD
       String todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      // Ambil nilai integer (raw bytes) dari result
-      int wifiBytes = result['wifi'] ?? 0;
-      int mobileBytes = result['mobile'] ?? 0;
+      int wifiBytes = _parseToInt(result['wifi']);
+      int mobileBytes = _parseToInt(result['mobile']);
 
-      // Simpan ke database (akan update jika tanggal hari ini sudah ada)
+      // simpan ke database
       await DatabaseHelper.instance.insertOrUpdate(
         todayDate,
         wifiBytes,
         mobileBytes,
       );
-      // ------------------------------------
+
+      if (!mounted) return;
 
       setState(() {
-        wifiUsage = _formatBytes(result['wifi']);
-        mobileUsage = _formatBytes(result['mobile']);
+        wifiUsage = _formatBytes(wifiBytes);
+        mobileUsage = _formatBytes(mobileBytes);
       });
+
+      await checkLimitAndWarn(mobileBytes);
     } on PlatformException catch (e) {
       if (e.code == "PERMISSION_DENIED") {
         _showPermissionDialog();
@@ -52,29 +108,58 @@ class _NetworkState extends State<Network> {
     }
   }
 
+  // ================= PARSE INT AMAN =================
+  int _parseToInt(dynamic value) {
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  // ================= FORMAT =================
   String _formatBytes(int bytes) {
     if (bytes <= 0) return "0.00 MB";
+
     double mb = bytes / (1024 * 1024);
+
     if (mb > 1024) {
       return "${(mb / 1024).toStringAsFixed(2)} GB";
     }
+
     return "${mb.toStringAsFixed(2)} MB";
   }
 
+  // ================= LIMIT WARNING =================
   Future<void> checkLimitAndWarn(int currentUsage) async {
-    // 1024 MB dalam Bytes
-    int limitInBytes = 1024 * 1024 * 1024;
+    int limitInBytes = 1024 * 1024 * 1024; //1 GB
 
-    if (currentUsage >= limitInBytes) {
+    // Warning 80%
+    if (currentUsage >= (limitInBytes * 0.8) && currentUsage < limitInBytes) {
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("⚠ Kuota Hampir Habis"),
+          content: const Text("Penggunaan data sudah mencapai 80% dari limit."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
+    // Warning 100%
+    else if (currentUsage >= limitInBytes) {
+      if (!mounted) return;
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text("Batas Kuota Tercapai!"),
-          content: const Text(
-            "Penggunaan data Anda sudah mencapai mencapai limit. "
-            "Sistem Android tidak mengizinkan aplikasi mematikan internet secara otomatis. "
-            "Silakan aktifkan 'Set Data Limit' di pengaturan sistem agar koneksi terputus otomatis.",
-          ),
+          content: const Text("Penggunaan data Anda sudah mencapai limit."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -96,39 +181,166 @@ class _NetworkState extends State<Network> {
   @override
   void initState() {
     super.initState();
+
+    loadTotalKuota();
+
     fetchUsage();
   }
 
+  int getRemainingDays() {
+    DateTime now = DateTime.now();
+
+    DateTime nextReset = DateTime(
+      now.month == 12 ? now.year + 1 : now.year,
+      now.month == 12 ? 1 : now.month + 1,
+      1,
+    );
+
+    return nextReset.difference(now).inDays;
+  }
+
+  double _parseUsageToGB(String usage) {
+    if (usage.contains("GB")) {
+      return double.parse(usage.replaceAll("GB", "").trim());
+    }
+
+    if (usage.contains("MB")) {
+      return double.parse(usage.replaceAll("MB", "").trim()) / 1024;
+    }
+
+    return 0;
+  }
+
+  String getHematStatus() {
+    double mobileUsedGB = _parseUsageToGB(mobileUsage);
+
+    double sisaKuota = totalKuotaGB - mobileUsedGB;
+
+    int sisaHari = getRemainingDays();
+
+    double batasAmanPerHari = sisaKuota / sisaHari;
+
+    if (mobileUsedGB > batasAmanPerHari) {
+      return "⚠ Pemakaian hari ini boros";
+    }
+
+    return "✅ Pemakaian masih aman";
+  }
+
+  String getPrediksiKuota() {
+    double mobileUsedGB = _parseUsageToGB(mobileUsage);
+
+    int hariBerjalan = DateTime.now().day;
+
+    if (mobileUsedGB <= 0) {
+      return "Prediksi belum tersedia";
+    }
+
+    double rataHarian = mobileUsedGB / hariBerjalan;
+
+    double sisaKuota = totalKuotaGB - mobileUsedGB;
+
+    if (rataHarian <= 0) {
+      return "Prediksi belum tersedia";
+    }
+
+    int prediksiHariHabis = (sisaKuota / rataHarian).floor();
+
+    return "📉 Kuota diperkirakan habis dalam $prediksiHariHabis hari";
+  }
+
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Monitoring Data'),
+
         actions: [
-          // Tombol untuk menuju halaman History
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: setTotalKuota,
+          ),
+
           IconButton(
             icon: const Icon(Icons.history),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const HistoryPage()),
+                MaterialPageRoute(builder: (_) => const HistoryPage()),
+              );
+            },
+          ),
+
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StatisticsPage()),
               );
             },
           ),
         ],
       ),
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const StatisticsPage()),
+          );
+        },
+        child: const Icon(Icons.bar_chart),
+      ),
+
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _usageCard("WiFi Today", wifiUsage, Icons.wifi),
+
             const SizedBox(height: 20),
+
             _usageCard("Mobile Today", mobileUsage, Icons.signal_cellular_alt),
+
+            const SizedBox(height: 20),
+
+            Text(
+              getHematStatus(),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            const SizedBox(height: 15),
+
+            Text(
+              getPrediksiKuota(),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.redAccent,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              "Total Kuota: $totalKuotaGB GB",
+              style: const TextStyle(fontSize: 16),
+            ),
+
             const SizedBox(height: 40),
+
             ElevatedButton.icon(
               onPressed: fetchUsage,
               icon: const Icon(Icons.refresh),
-              label: const Text('Refresh Data'),
+              label: const Text("Refresh Data"),
             ),
           ],
         ),
@@ -136,6 +348,7 @@ class _NetworkState extends State<Network> {
     );
   }
 
+  // ================= CARD =================
   Widget _usageCard(String title, String value, IconData icon) {
     return Container(
       width: 300,
@@ -164,16 +377,17 @@ class _NetworkState extends State<Network> {
     );
   }
 
+  // ================= PERMISSION =================
   void _showPermissionDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false, // User harus menekan tombol
-      builder: (BuildContext context) {
+      barrierDismissible: false,
+      builder: (context) {
         return AlertDialog(
           title: const Text("Izin Diperlukan"),
           content: const Text(
-            "Aplikasi membutuhkan izin 'Akses Penggunaan' untuk membaca statistik data internet di perangkat Anda.\n\n"
-            "Silakan aktifkan izin untuk aplikasi ini di halaman pengaturan yang akan terbuka.",
+            "Aplikasi membutuhkan izin akses penggunaan.\n\n"
+            "Silakan aktifkan di pengaturan.",
           ),
           actions: [
             TextButton(
@@ -183,8 +397,6 @@ class _NetworkState extends State<Network> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                // Memanggil kembali fetchUsage akan memicu Kotlin
-                // untuk membuka halaman pengaturan lagi
                 fetchUsage();
               },
               child: const Text("Buka Pengaturan"),
