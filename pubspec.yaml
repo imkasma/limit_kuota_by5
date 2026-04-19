@@ -1,5 +1,5 @@
-name: limit_kuota
-description: "A new Flutter project."
+name: limit_kuota_by5
+description: "Ini APP tracking Internetmu:)"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -39,7 +39,12 @@ dependencies:
   sqflite: ^2.3.0
   path: ^1.8.3
   android_intent_plus: ^6.0.0
+<<<<<<< HEAD
   
+=======
+  shared_preferences: ^2.2.2
+
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
 dev_dependencies:
   flutter_test:
     sdk: flutter

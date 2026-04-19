@@ -1,12 +1,20 @@
+// src/features/monitoring/network_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+<<<<<<< HEAD
 
 import 'package:limit_kuota/src/core/data/database_helper.dart';
 import 'package:limit_kuota/src/core/services/intent_helper.dart';
 import 'package:limit_kuota/src/features/monitoring/history_page.dart';
 import 'package:limit_kuota/src/features/statistics/statistics_page.dart';
+=======
+import 'package:limit_kuota_by5/src/core/data/database_helper.dart';
+import 'package:limit_kuota_by5/src/core/services/intent_helper.dart';
+import 'package:limit_kuota_by5/src/features/monitoring/history_page.dart';
+import 'package:limit_kuota_by5/src/core/widgets/progress_quota.dart';
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
 
 class Network extends StatefulWidget {
   const Network({super.key});
@@ -21,6 +29,7 @@ class _NetworkState extends State<Network> {
   String wifiUsage = "0.00 MB";
   String mobileUsage = "0.00 MB";
 
+<<<<<<< HEAD
   double totalKuotaGB = 30;
 
   Future<void> saveTotalKuota() async {
@@ -87,17 +96,79 @@ class _NetworkState extends State<Network> {
       int mobileBytes = _parseToInt(result['mobile']);
 
       // simpan ke database
+=======
+  double wifiBytesVal = 0;
+  double mobileBytesVal = 0;
+
+  // ================= RESET BULANAN =================
+  Future<void> checkMonthlyReset() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final lastResetString = prefs.getString('last_reset_date');
+    final now = DateTime.now();
+
+    if (lastResetString != null) {
+      final lastReset = DateTime.parse(lastResetString);
+
+      if (lastReset.month != now.month || lastReset.year != now.year) {
+        await _resetDatabase();
+        await prefs.setString('last_reset_date', now.toIso8601String());
+      }
+    } else {
+      await prefs.setString('last_reset_date', now.toIso8601String());
+    }
+  }
+
+  Future<void> _resetDatabase() async {
+    final db = await DatabaseHelper.instance.database;
+
+    await db.delete('usage');
+
+    setState(() {
+      wifiUsage = "0.00 MB";
+      mobileUsage = "0.00 MB";
+      wifiBytesVal = 0;
+      mobileBytesVal = 0;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Data telah direset (bulan baru)")),
+    );
+  }
+  // =================================================
+
+  Future<void> fetchUsage() async {
+    try {
+      final Map<dynamic, dynamic> result = await platform.invokeMethod(
+        'getTodayUsage',
+      );
+
+      String todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      int wifiBytes = result['wifi'] ?? 0;
+      int mobileBytes = result['mobile'] ?? 0;
+
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
       await DatabaseHelper.instance.insertOrUpdate(
         todayDate,
         wifiBytes,
         mobileBytes,
       );
+<<<<<<< HEAD
 
       if (!mounted) return;
+=======
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
 
       setState(() {
         wifiUsage = _formatBytes(wifiBytes);
         mobileUsage = _formatBytes(mobileBytes);
+<<<<<<< HEAD
+=======
+
+        wifiBytesVal = wifiBytes.toDouble();
+        mobileBytesVal = mobileBytes.toDouble();
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
       });
 
       await checkLimitAndWarn(mobileBytes);
@@ -131,6 +202,7 @@ class _NetworkState extends State<Network> {
 
   // ================= LIMIT WARNING =================
   Future<void> checkLimitAndWarn(int currentUsage) async {
+<<<<<<< HEAD
     int limitInBytes = 1024 * 1024 * 1024; //1 GB
 
     // Warning 80%
@@ -154,12 +226,22 @@ class _NetworkState extends State<Network> {
     // Warning 100%
     else if (currentUsage >= limitInBytes) {
       if (!mounted) return;
+=======
+    int limitInBytes = 1024 * 1024 * 1024;
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
 
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text("Batas Kuota Tercapai!"),
+<<<<<<< HEAD
           content: const Text("Penggunaan data Anda sudah mencapai limit."),
+=======
+          content: const Text(
+            "Penggunaan data Anda sudah mencapai limit. "
+            "Silakan aktifkan 'Set Data Limit' di pengaturan sistem.",
+          ),
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -181,10 +263,19 @@ class _NetworkState extends State<Network> {
   @override
   void initState() {
     super.initState();
+<<<<<<< HEAD
 
     loadTotalKuota();
 
     fetchUsage();
+=======
+    initApp();
+  }
+
+  Future<void> initApp() async {
+    await checkMonthlyReset();
+    await fetchUsage();
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
   }
 
   int getRemainingDays() {
@@ -257,11 +348,14 @@ class _NetworkState extends State<Network> {
         title: const Text('Monitoring Data'),
 
         actions: [
+<<<<<<< HEAD
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: setTotalKuota,
           ),
 
+=======
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
           IconButton(
             icon: const Icon(Icons.history),
             onPressed: () {
@@ -299,10 +393,16 @@ class _NetworkState extends State<Network> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _usageCard("WiFi Today", wifiUsage, Icons.wifi),
+<<<<<<< HEAD
+=======
+            const SizedBox(height: 8),
+            ProgressQuota(used: wifiBytesVal, limit: 1024 * 1024 * 1024),
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
 
             const SizedBox(height: 20),
 
             _usageCard("Mobile Today", mobileUsage, Icons.signal_cellular_alt),
+<<<<<<< HEAD
 
             const SizedBox(height: 20),
 
@@ -334,6 +434,10 @@ class _NetworkState extends State<Network> {
               "Total Kuota: $totalKuotaGB GB",
               style: const TextStyle(fontSize: 16),
             ),
+=======
+            const SizedBox(height: 8),
+            ProgressQuota(used: mobileBytesVal, limit: 1024 * 1024 * 1024),
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
 
             const SizedBox(height: 40),
 
@@ -382,12 +486,21 @@ class _NetworkState extends State<Network> {
     showDialog(
       context: context,
       barrierDismissible: false,
+<<<<<<< HEAD
       builder: (context) {
         return AlertDialog(
           title: const Text("Izin Diperlukan"),
           content: const Text(
             "Aplikasi membutuhkan izin akses penggunaan.\n\n"
             "Silakan aktifkan di pengaturan.",
+=======
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Izin Diperlukan"),
+          content: const Text(
+            "Aplikasi membutuhkan izin 'Akses Penggunaan'.\n\n"
+            "Silakan aktifkan izin di pengaturan.",
+>>>>>>> 77350aaff14d31b6727c7c305831e61dd5d0c20e
           ),
           actions: [
             TextButton(
