@@ -7,6 +7,7 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
+  // ================= INIT DATABASE =================
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('usage_history.db');
@@ -20,33 +21,85 @@ class DatabaseHelper {
     return await openDatabase(path, version: 1, onCreate: _createDB);
   }
 
-  Future _createDB(Database db, int version) async {
-    // Kita buat tabel dengan kolom: date (Primary Key), wifi, mobile
+  // ================= CREATE TABLE =================
+  Future<void> _createDB(Database db, int version) async {
     await db.execute('''
-    CREATE TABLE history (
-      date TEXT PRIMARY KEY, 
-      wifi INTEGER, 
-      mobile INTEGER
-    )
+      CREATE TABLE history (
+        date TEXT PRIMARY KEY,
+        wifi INTEGER,
+        mobile INTEGER
+      )
     ''');
   }
 
+  // ================= INSERT / UPDATE =================
   Future<void> insertOrUpdate(String date, int wifi, int mobile) async {
     final db = await instance.database;
 
-    // ConflictAlgorithm.replace akan menimpa data jika tanggal (Primary Key) sama.
-    // Ini berguna karena 'getTodayUsage' dari Kotlin selalu mengembalikan total
-    // akumulasi hari ini dari jam 00:00 sampai sekarang.
-    await db.insert(
-      'history',
-      {'date': date, 'wifi': wifi, 'mobile': mobile},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('history', {
+      'date': date,
+      'wifi': wifi,
+      'mobile': mobile,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  // ================= GET HISTORY =================
   Future<List<Map<String, dynamic>>> getHistory() async {
     final db = await instance.database;
-    // Ambil data diurutkan dari tanggal terbaru
+
     return await db.query('history', orderBy: 'date DESC');
+  }
+
+  // ================= GET DATA UNTUK CHART =================
+  Future<List<Map<String, dynamic>>> getUsageForChart() async {
+    final db = await instance.database;
+
+    return await db.query('history', orderBy: 'date ASC');
+  }
+
+  // ================= TOTAL MOBILE =================
+  Future<double> getTotalMobileUsage() async {
+    final db = await instance.database;
+
+    final result = await db.rawQuery(
+      'SELECT SUM(mobile) as total FROM history',
+    );
+
+    final total = result.first['total'];
+
+    return total == null ? 0 : (total as num).toDouble();
+  }
+
+  // ================= TOTAL WIFI =================
+  Future<double> getTotalWifiUsage() async {
+    final db = await instance.database;
+
+    final result = await db.rawQuery('SELECT SUM(wifi) as total FROM history');
+
+    final total = result.first['total'];
+
+    return total == null ? 0 : (total as num).toDouble();
+  }
+
+  Future<List<double>> getWeeklyUsageData() async {
+    final db = await instance.database;
+
+    final result = await db.query('history', orderBy: 'date DESC', limit: 7);
+
+    List<double> weeklyData = result.reversed.map((row) {
+      return ((row['mobile'] as num).toDouble()) / (1024 * 1024 * 1024);
+    }).toList();
+
+    while (weeklyData.length < 7) {
+      weeklyData.insert(0, 0);
+    }
+
+    return weeklyData;
+  }
+
+  // ================= CLEAR DATA (OPTIONAL) =================
+  Future<void> clearAllData() async {
+    final db = await instance.database;
+    await db.delete('history');
   }
 }
