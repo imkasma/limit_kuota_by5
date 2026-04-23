@@ -9,78 +9,128 @@ import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
-import android.telephony.TelephonyManager
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.Calendar
 
 class MainActivity : FlutterActivity() {
+
     private val CHANNEL = "limit_kuota/channel"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "getTodayUsage") {
-                if (!hasUsageStatsPermission()) {
-                    requestUsageStatsPermission()
-                    result.error("PERMISSION_DENIED", "Izin diperlukan", null)
-                } else {
-                    val wifi = getUsage(ConnectivityManager.TYPE_WIFI)
-                    val mobile = getUsage(ConnectivityManager.TYPE_MOBILE)
-                    
-                    // Kirim data dalam bentuk Map ke Flutter
-                    val data = mapOf(
-                        "wifi" to wifi,
-                        "mobile" to mobile
-                    )
-                    result.success(data)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            CHANNEL
+        ).setMethodCallHandler { call, result ->
+
+            when (call.method) {
+                "getTodayUsage" -> {
+                    if (!hasUsageStatsPermission()) {
+                        requestUsageStatsPermission()
+                        result.error(
+                            "PERMISSION_DENIED",
+                            "Izin akses penggunaan diperlukan",
+                            null
+                        )
+                    } else {
+                        val wifi = getUsage(ConnectivityManager.TYPE_WIFI)
+                        val mobile = getUsage(ConnectivityManager.TYPE_MOBILE)
+
+                        Log.d("USAGE_STATS", "WiFi: $wifi | Mobile: $mobile")
+
+                        val data = mapOf(
+                            "wifi" to wifi,
+                            "mobile" to mobile,
+                            "timestamp" to System.currentTimeMillis()
+                        )
+
+                        result.success(data)
+                    }
                 }
-            } else {
-                result.notImplemented()
+
+                else -> result.notImplemented()
             }
         }
     }
 
+    // =========================
+    // CHECK PERMISSION
+    // =========================
     private fun hasUsageStatsPermission(): Boolean {
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
-        } else {
-            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName)
-        }
+        val appOps =
+            getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+
+        val mode =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOps.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    packageName
+                )
+            } else {
+                appOps.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    packageName
+                )
+            }
+
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
+    // =========================
+    // REQUEST PERMISSION
+    // =========================
     private fun requestUsageStatsPermission() {
-        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
     }
 
+    // =========================
+    // GET NETWORK USAGE TODAY
+    // =========================
     private fun getUsage(networkType: Int): Long {
-        val networkStatsManager = getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
+        val networkStatsManager =
+            getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
 
-        val start = calendar.timeInMillis
-        val end = System.currentTimeMillis()
-        var total: Long = 0
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val startTime = calendar.timeInMillis
+        val endTime = System.currentTimeMillis()
+
+        var totalBytes = 0L
 
         try {
-            // Kita gunakan querySummary untuk iterasi semua bucket data
-            // null digunakan untuk SubscriberID agar mencakup semua SIM/WiFi
-            val stats = networkStatsManager.querySummary(networkType, null, start, end)
+            val stats = networkStatsManager.querySummary(
+                networkType,
+                null,
+                startTime,
+                endTime
+            )
+
             val bucket = NetworkStats.Bucket()
+
             while (stats.hasNextBucket()) {
                 stats.getNextBucket(bucket)
-                total += bucket.rxBytes + bucket.txBytes
+                totalBytes += bucket.rxBytes + bucket.txBytes
             }
+
             stats.close()
+
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("USAGE_STATS", "Error reading usage stats", e)
         }
-        return total
+
+        return totalBytes
     }
 }

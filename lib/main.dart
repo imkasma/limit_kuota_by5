@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:limit_kuota_by5/src/features/monitoring/network_page.dart';
+import 'package:limit_kuota_by5/src/core/services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await NotificationService.init();
+
   runApp(const MyApp());
 }
 
@@ -10,9 +15,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Network(),
+      title: 'Limit Kuota',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const Network(),
     );
   }
 }
